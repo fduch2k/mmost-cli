@@ -1,0 +1,52 @@
+{
+  "name": "@fduch2k/mmost-cli",
+  "version": "0.0.5",
+  "author": "fduch2k",
+  "license": "MIT",
+  "description": "Mattermost command-line utility",
+  "repository": "https://github.com/fduch2k/mmost-cli",
+  "homepage": "https://github.com/fduch2k/mmost-cli",
+  "files": [
+    "build",
+    "package.json",
+    "package-lock.json",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "keywords": [
+    "cli",
+    "mattermost",
+    "npx"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "test": "jest"
+  },
+  "bin": {
+    "@fduch2k/mmost-cli": "build/index.js",
+    "mmost": "build/index.js"
+  },
+  "dependencies": {
+    "@mattermost/client": "^10.6.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@mattermost/types": "^10.6.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.3",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.3.1",
+    "jest": "^29.7.0",
+    "prettier": "^3.5.3",
+    "ts-jest": "^29.3.2",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}
