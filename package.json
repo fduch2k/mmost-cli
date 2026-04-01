@@ -1,6 +1,6 @@
 {
   "name": "@fduch2k/mmost-cli",
-  "version": "0.0.5",
+  "version": "0.1.1",
   "author": "fduch2k",
   "license": "MIT",
   "description": "Mattermost command-line utility",
