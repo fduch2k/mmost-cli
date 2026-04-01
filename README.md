@@ -95,7 +95,15 @@ mmost create-post --channel-id abc123 --message "Release is live"
 mmost add-reaction --post-id post123 --emoji-name +1,eyes
 ```
 
-## For agents and skills
+## Agent Skill
+
+Install the Mattermost skill for your coding agent:
+
+```bash
+npx skills add fduch2k/mmost-cli
+```
+
+This installs the `mattermost` skill from `skills/mattermost/SKILL.md` into your agent's skill directory. Supports OpenCode, Claude Code, Cursor, Codex, and [40+ other agents](https://github.com/vercel-labs/skills#supported-agents).
 
 All commands output JSON by default — no flags needed for agent use:
 
