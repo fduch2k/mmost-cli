@@ -73,6 +73,7 @@ mmost search-users --term john --json
 - `search-channels` (`--term`, `--page`, `--per-page`)
 - `get-channels` (`--channel-id` or `--name`)
 - `get-my-channels`
+- `create-dm` (`--user-id`)
 - `search-posts` (`--terms`, `--page`, `--per-page`)
 - `get-posts` (`--post-id`)
 - `get-posts-unread` (`--channel-id`)
@@ -92,6 +93,7 @@ mmost search-users --term john
 mmost search-users --term john --human
 mmost get-channels --name town-square,off-topic
 mmost create-post --channel-id abc123 --message "Release is live"
+mmost create-dm --user-id user1_id,user2_id
 mmost add-reaction --post-id post123 --emoji-name +1,eyes
 ```
 
