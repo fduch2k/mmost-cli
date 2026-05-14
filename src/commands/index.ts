@@ -25,7 +25,8 @@ export async function executeCommand(
   if (
     command === 'search-channels' ||
     command === 'get-channels' ||
-    command === 'get-my-channels'
+    command === 'get-my-channels' ||
+    command === 'create-dm'
   ) {
     return runChannelCommand(command, client, {
       term: options.term as string | undefined,
@@ -33,6 +34,7 @@ export async function executeCommand(
       perPage: options.perPage as number | undefined,
       channelId: options.channelId as string | undefined,
       name: options.name as string | undefined,
+      userId: options.userId as string | undefined,
     });
   }
 

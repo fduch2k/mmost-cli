@@ -110,6 +110,21 @@ export const COMMAND_SPECS: CommandSpec[] = [
     examples: ['mmost get-my-channels'],
   },
   {
+    name: 'create-dm',
+    description:
+      'Create a direct message channel between two users. Idempotent — returns existing channel if already exists.',
+    options: [
+      {
+        key: 'userId',
+        flag: 'user-id',
+        type: 'string',
+        required: true,
+        description: 'Comma-separated pair of user IDs (exactly 2)',
+      },
+    ],
+    examples: ['mmost create-dm --user-id user1_id,user2_id'],
+  },
+  {
     name: 'search-posts',
     description: 'Search posts by terms',
     options: [

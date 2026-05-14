@@ -6,6 +6,7 @@ type ChannelCommandOptions = {
   perPage?: number;
   channelId?: string;
   name?: string;
+  userId?: string;
 };
 
 function splitCsv(value: string): string[] {
@@ -48,6 +49,17 @@ export async function runChannelCommand(
 
   if (command === 'get-my-channels') {
     return client.getMyChannels();
+  }
+
+  if (command === 'create-dm') {
+    if (!options.userId) {
+      throw new Error('Missing required option: --user-id');
+    }
+    const userIds = splitCsv(options.userId);
+    if (userIds.length !== 2) {
+      throw new Error('--user-id must contain exactly 2 comma-separated user IDs');
+    }
+    return client.createDirectChannel({ userIds: userIds as [string, string] });
   }
 
   throw new Error(`Unsupported channel command: ${command}`);

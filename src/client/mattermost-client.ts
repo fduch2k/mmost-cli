@@ -255,6 +255,14 @@ export class MattermostClient {
   }
 
   /**
+   * Create a direct message channel between two users
+   * Idempotent — returns existing channel if already exists
+   */
+  async createDirectChannel({ userIds }: { userIds: [string, string] }) {
+    return this.convertChannel(await this.client.createDirectChannel(userIds));
+  }
+
+  /**
    * Get channels for the current user
    */
   async getMyChannels() {
