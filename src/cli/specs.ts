@@ -211,6 +211,28 @@ export const COMMAND_SPECS: CommandSpec[] = [
     examples: ['mmost create-post --channel-id cid1 --message "hello"'],
   },
   {
+    name: 'update-post',
+    description:
+      'Update the message of an existing post. Other post fields are preserved. Editing sends no notifications.',
+    options: [
+      {
+        key: 'postId',
+        flag: 'post-id',
+        type: 'string',
+        required: true,
+        description: 'Post ID',
+      },
+      {
+        key: 'message',
+        flag: 'message',
+        type: 'string',
+        required: true,
+        description: 'New message body (replaces the current one)',
+      },
+    ],
+    examples: ['mmost update-post --post-id p1 --message "fixed text"'],
+  },
+  {
     name: 'get-posts-thread',
     description: 'Get posts in a thread',
     options: [

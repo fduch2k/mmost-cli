@@ -36,11 +36,11 @@ Configure environment variables:
 
 ## How to use
 
-Run `mmost --help` for the full command list and `mmost help <command>` for details on any command. The CLI has 17 commands:
+Run `mmost --help` for the full command list and `mmost help <command>` for details on any command. The CLI has 19 commands:
 
 **Users**: `get-me`, `get-users`, `search-users`
-**Channels**: `search-channels`, `get-channels`, `get-my-channels`
-**Posts**: `search-posts`, `get-posts`, `get-posts-unread`, `create-post`, `get-posts-thread`, `pin-post`, `unpin-post`, `get-posts-pinned`
+**Channels**: `search-channels`, `get-channels`, `get-my-channels`, `create-dm`
+**Posts**: `search-posts`, `get-posts`, `get-posts-unread`, `create-post`, `update-post`, `get-posts-thread`, `pin-post`, `unpin-post`, `get-posts-pinned`
 **Reactions**: `add-reaction`, `remove-reaction`, `get-reactions`
 
 ## ID resolution
@@ -70,6 +70,8 @@ mmost get-users --user-id <user_id>         # batch: --user-id id1,id2,id3
 These commands modify data. **Always confirm with the user before executing.**
 
 - `create-post` — sends a message (or thread reply with `--root-id`)
+- `update-post` — replaces the message text of an existing post (own posts only)
+- `create-dm` — creates a DM channel between two users (idempotent)
 - `pin-post` / `unpin-post` — pins or unpins a post
 - `add-reaction` / `remove-reaction` — adds or removes emoji reactions
 
@@ -91,10 +93,79 @@ Posts return raw Mattermost API objects. Key navigation fields:
 | `type`        | Channel type: `O` (public), `P` (private), `D` (DM), `G` (group DM) |
 | `username`    | On user profiles — the human-readable username                      |
 
+## Command Reference (exact syntax)
+
+⚠️ **Use ONLY these flags. Do NOT invent flags like `--post-id` for commands that use `--root-id`.**
+
+```
+get-me                                          # no args
+get-users       [--username <str>] [--user-id <str>]
+search-users    --term <str> [--page <n>] [--per-page <n>]
+search-channels --term <str> [--page <n>] [--per-page <n>]
+get-channels    [--channel-id <str>] [--name <str>]
+get-my-channels                                 # no args
+create-dm       --user-id <id1>,<id2>           # exactly 2 user IDs
+search-posts    --terms <str> [--page <n>] [--per-page <n>]
+get-posts       --post-id <str>                 # comma-separated IDs
+get-posts-unread --channel-id <str>
+get-posts-thread --root-id <str> [--from-post <str>] [--per-page <n>]
+create-post     --channel-id <str> --message <str> [--root-id <str>]
+update-post     --post-id <str> --message <str>
+pin-post        --post-id <str>
+unpin-post      --post-id <str>
+get-posts-pinned --channel-id <str>
+add-reaction    --post-id <str> --emoji-name <str>
+remove-reaction --post-id <str> --emoji-name <str>
+get-reactions   --post-id <str>
+```
+
+### Common gotchas
+
+| Want to...             | ✅ Correct                           | ❌ Wrong                          |
+| ---------------------- | ------------------------------------ | --------------------------------- |
+| Read a thread          | `get-posts-thread --root-id <id>`    | `get-posts-thread --post-id <id>` |
+| Read specific posts    | `get-posts --post-id <id>`           | `get-posts --root-id <id>`        |
+| Read unread in channel | `get-posts-unread --channel-id <id>` | `get-posts-unread --post-id <id>` |
+| Edit a post            | `update-post --post-id <id>`         | `create-post --post-id <id>`      |
+
+### URL → post ID extraction
+
+Mattermost permalink format: `https://<host>/<team>/pl/<post_id>`
+Extract `<post_id>` from the URL and use it as `--root-id` for threads or `--post-id` for single posts.
+
+### Sending a DM
+
+To send a direct message, create (or get existing) DM channel first, then post into it:
+
+```bash
+# 1. Resolve usernames → IDs
+mmost get-users --username alice            # extract id
+mmost get-me                                # your own id
+
+# 2. Create/get DM channel (idempotent — returns existing if already exists)
+mmost create-dm --user-id <your_id>,<alice_id>
+
+# 3. Send message using the returned channel id
+mmost create-post --channel-id <dm_channel_id> --message "Hey!"
+```
+
+### Editing a post
+
+`update-post` replaces the whole message — read the current text first, edit it, then send the full new body:
+
+```bash
+mmost get-posts --post-id <post_id>                          # take `message`, apply your change
+mmost update-post --post-id <post_id> --message "<full new text>"
+```
+
+- Only your own posts can be edited; someone else's post returns a permission error.
+- `edit_at` becomes non-empty in the response — that confirms the edit landed.
+- **Editing sends no notifications.** If people need to know about the change, add a reply in the thread: `create-post --root-id <post_id>`.
+
 ## Known limitations
 
 - **No overview command** — compose triage: `get-my-channels` → `get-posts-unread` per channel
 - **No mentions command** — use `get-me` to get username, then `search-posts --terms "@username"`
 - **No time filters** — no `--since` flag; use `search-posts` date modifiers (`after:`, `before:`, `on:`) instead
-- **`get-my-channels` excludes DMs** — returns public (O) and private (P) only; use `search-channels` for specific channels
+- **`get-my-channels` excludes DMs** — returns public (O) and private (P) only; use `create-dm` to get a specific DM channel or `search-channels` for lookup
 - **IDs required** — see "ID resolution" above

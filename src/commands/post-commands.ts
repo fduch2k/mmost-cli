@@ -62,6 +62,19 @@ export async function runPostCommand(
     });
   }
 
+  if (command === 'update-post') {
+    if (!options.postId) {
+      throw new Error('Missing required option: --post-id');
+    }
+    if (!options.message) {
+      throw new Error('Missing required option: --message');
+    }
+    return client.updatePost({
+      postId: options.postId,
+      message: options.message,
+    });
+  }
+
   if (command === 'get-posts-thread') {
     if (!options.rootId) {
       throw new Error('Missing required option: --root-id');

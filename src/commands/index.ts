@@ -43,6 +43,7 @@ export async function executeCommand(
     command === 'get-posts' ||
     command === 'get-posts-unread' ||
     command === 'create-post' ||
+    command === 'update-post' ||
     command === 'get-posts-thread' ||
     command === 'pin-post' ||
     command === 'unpin-post' ||

@@ -189,6 +189,14 @@ export class MattermostClient {
   }
 
   /**
+   * Update the message of an existing post
+   * Patch request — post fields other than the message are preserved
+   */
+  async updatePost({ postId, message }: { postId: string; message: string }) {
+    return this.convertPost(await this.client.patchPost({ id: postId, message }));
+  }
+
+  /**
    * Get posts in a thread
    */
   async getPostsThread({

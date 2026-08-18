@@ -78,6 +78,7 @@ mmost search-users --term john --json
 - `get-posts` (`--post-id`)
 - `get-posts-unread` (`--channel-id`)
 - `create-post` (`--channel-id`, `--message`, `--root-id`)
+- `update-post` (`--post-id`, `--message`)
 - `get-posts-thread` (`--root-id`, `--from-post`, `--per-page`)
 - `pin-post` (`--post-id`)
 - `unpin-post` (`--post-id`)
@@ -93,6 +94,7 @@ mmost search-users --term john
 mmost search-users --term john --human
 mmost get-channels --name town-square,off-topic
 mmost create-post --channel-id abc123 --message "Release is live"
+mmost update-post --post-id post123 --message "Release is live (fixed link)"
 mmost create-dm --user-id user1_id,user2_id
 mmost add-reaction --post-id post123 --emoji-name +1,eyes
 ```

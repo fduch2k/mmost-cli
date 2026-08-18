@@ -57,6 +57,14 @@ jest.mock('@mattermost/client', () => ({
       edit_at: 0,
       delete_at: 0,
     }),
+    patchPost: jest.fn().mockResolvedValue({
+      id: 'test-post-id',
+      message: 'edited-post',
+      create_at: 123456789,
+      update_at: 123456999,
+      edit_at: 123456999,
+      delete_at: 0,
+    }),
     getPaginatedPostThread: jest.fn().mockResolvedValue({
       posts: {
         'test-post-id': {
@@ -208,6 +216,18 @@ describe('MattermostClient', () => {
         create_at: new Date(123456789),
         update_at: new Date(123456789),
         edit_at: '',
+        delete_at: '',
+      });
+    });
+
+    it('should update an existing post', async () => {
+      const result = await client.updatePost({ postId: 'test-post-id', message: 'edited-post' });
+      expect(result).toEqual({
+        id: 'test-post-id',
+        message: 'edited-post',
+        create_at: new Date(123456789),
+        update_at: new Date(123456999),
+        edit_at: new Date(123456999),
         delete_at: '',
       });
     });
@@ -427,6 +447,18 @@ describe('MattermostClient', () => {
         create_at: new Date(123456789),
         update_at: new Date(123456789),
         edit_at: '',
+        delete_at: '',
+      });
+    });
+
+    it('should update an existing post', async () => {
+      const result = await client.updatePost({ postId: 'test-post-id', message: 'edited-post' });
+      expect(result).toEqual({
+        id: 'test-post-id',
+        message: 'edited-post',
+        create_at: new Date(123456789),
+        update_at: new Date(123456999),
+        edit_at: new Date(123456999),
         delete_at: '',
       });
     });
