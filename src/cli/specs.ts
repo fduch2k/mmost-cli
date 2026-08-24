@@ -233,6 +233,117 @@ export const COMMAND_SPECS: CommandSpec[] = [
     examples: ['mmost update-post --post-id p1 --message "fixed text"'],
   },
   {
+    name: 'create-scheduled-post',
+    description:
+      'Schedule a post for future delivery. Uses the Loop scheduler plugin when the server has it, otherwise the upstream Mattermost scheduled posts API.',
+    options: [
+      {
+        key: 'channelId',
+        flag: 'channel-id',
+        type: 'string',
+        required: true,
+        description: 'Channel ID',
+      },
+      {
+        key: 'message',
+        flag: 'message',
+        type: 'string',
+        required: true,
+        description: 'Message body',
+      },
+      {
+        key: 'at',
+        flag: 'at',
+        type: 'string',
+        required: true,
+        description:
+          "Delivery time: relative offset (+30m, +2h, +1d, +1w), ISO-8601 ('2026-08-25T09:30:00Z', '2026-08-25 09:30' in local time) or a unix timestamp in seconds/milliseconds. Must be in the future.",
+      },
+      {
+        key: 'rootId',
+        flag: 'root-id',
+        type: 'string',
+        description: 'Root post ID for thread reply',
+      },
+      {
+        key: 'days',
+        flag: 'days',
+        type: 'string',
+        description:
+          'Repeat weekly on these days: mon,tue,wed,thu,fri,sat,sun (Loop servers only). Implies --repeat.',
+      },
+      {
+        key: 'repeat',
+        flag: 'repeat',
+        type: 'boolean',
+        description: 'Repeat weekly; requires --days (Loop servers only)',
+      },
+    ],
+    examples: [
+      'mmost create-scheduled-post --channel-id cid1 --message "standup starts" --at +2h',
+      'mmost create-scheduled-post --channel-id cid1 --message "standup" --at +1d --days mon,wed,fri',
+      'mmost create-scheduled-post --channel-id cid1 --message "release notes" --at 2026-08-25T09:30:00Z',
+    ],
+  },
+  {
+    name: 'get-scheduled-posts',
+    description:
+      'Get pending scheduled posts of the current user, ordered by delivery time. Includes DM channels unless --exclude-dms is passed (that flag is ignored on Loop servers).',
+    options: [
+      {
+        key: 'excludeDms',
+        flag: 'exclude-dms',
+        type: 'boolean',
+        description: 'Return only posts scheduled in team channels, skipping DMs and group DMs',
+      },
+    ],
+    examples: ['mmost get-scheduled-posts', 'mmost get-scheduled-posts --exclude-dms --human'],
+  },
+  {
+    name: 'update-scheduled-post',
+    description:
+      'Update the message and/or the delivery time of a pending scheduled post. At least one of --message or --at is required. On Loop servers the record is recreated, so its ID changes.',
+    options: [
+      {
+        key: 'scheduledPostId',
+        flag: 'scheduled-post-id',
+        type: 'string',
+        required: true,
+        description: 'Scheduled post ID (from get-scheduled-posts)',
+      },
+      {
+        key: 'message',
+        flag: 'message',
+        type: 'string',
+        description: 'New message body (replaces the current one)',
+      },
+      {
+        key: 'at',
+        flag: 'at',
+        type: 'string',
+        description: 'New delivery time, same formats as create-scheduled-post',
+      },
+    ],
+    examples: [
+      'mmost update-scheduled-post --scheduled-post-id sp1 --message "fixed text"',
+      'mmost update-scheduled-post --scheduled-post-id sp1 --at +1d',
+    ],
+  },
+  {
+    name: 'delete-scheduled-post',
+    description: 'Delete a pending scheduled post so it is never delivered',
+    options: [
+      {
+        key: 'scheduledPostId',
+        flag: 'scheduled-post-id',
+        type: 'string',
+        required: true,
+        description: 'Scheduled post ID (from get-scheduled-posts)',
+      },
+    ],
+    examples: ['mmost delete-scheduled-post --scheduled-post-id sp1'],
+  },
+  {
     name: 'get-posts-thread',
     description: 'Get posts in a thread',
     options: [

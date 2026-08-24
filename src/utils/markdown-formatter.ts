@@ -146,6 +146,55 @@ export function formatPostListMarkdown(postList: object): string {
   return lines.join('\n');
 }
 
+function repeatCell(post: Record<string, unknown>): string {
+  const days = post.days_of_week;
+  if (Array.isArray(days) && days.length > 0) {
+    return `weekly: ${days.join(', ')}`;
+  }
+  return 'no';
+}
+
+export function formatScheduledPostMarkdown(post: object): string {
+  const p = post as Record<string, unknown>;
+
+  return [
+    '## Scheduled Post',
+    '',
+    '| Field       | Value |',
+    '|-------------|-------|',
+    `| ID          | ${escapeCell(p.id)} |`,
+    `| Channel     | ${escapeCell(p.channel_id)} |`,
+    `| Author      | ${escapeCell(p.user_id)} |`,
+    `| Message     | ${truncate(p.message, 80)} |`,
+    `| Scheduled   | ${dateOrDash(p.scheduled_at)} |`,
+    `| Repeat      | ${repeatCell(p)} |`,
+    `| Root Post   | ${p.root_id ? escapeCell(p.root_id) : '-'} |`,
+    `| Processed   | ${dateOrDash(p.processed_at)} |`,
+    `| Error       | ${p.error_code ? escapeCell(p.error_code) : '-'} |`,
+    `| Backend     | ${p.backend ? escapeCell(p.backend) : '-'} |`,
+    '',
+  ].join('\n');
+}
+
+export function formatScheduledPostsMarkdown(posts: object[]): string {
+  const lines: string[] = [
+    `## Scheduled Posts (${posts.length} pending)`,
+    '',
+    '| Scheduled | ID | Channel | Message | Repeat | Error |',
+    '|-----------|----|---------|---------|--------|-------|',
+  ];
+
+  for (const item of posts) {
+    const p = item as Record<string, unknown>;
+    lines.push(
+      `| ${dateOrDash(p.scheduled_at)} | ${truncate(p.id, 40)} | ${truncate(p.channel_id, 40)} | ${truncate(p.message, 60)} | ${repeatCell(p)} | ${p.error_code ? escapeCell(p.error_code) : '-'} |`,
+    );
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
 export function formatReactionMarkdown(reaction: object): string {
   const r = reaction as Record<string, unknown>;
 
@@ -265,6 +314,17 @@ export function formatMarkdown(data: unknown, command: string): string {
     case 'create-post':
       if (isObject(data) && !isArray(data)) return formatPostMarkdown(data);
       return formatStatusMarkdown(isObject(data) ? data : { result: data });
+
+    case 'create-scheduled-post':
+    case 'update-scheduled-post':
+    case 'delete-scheduled-post':
+      if (isObject(data) && !isArray(data)) return formatScheduledPostMarkdown(data);
+      return formatStatusMarkdown(isObject(data) ? data : { result: data });
+
+    case 'get-scheduled-posts':
+      if (isArray(data)) return formatScheduledPostsMarkdown(data);
+      if (isObject(data)) return formatScheduledPostMarkdown(data);
+      return formatStatusMarkdown({ result: data });
 
     case 'pin-post':
     case 'unpin-post':

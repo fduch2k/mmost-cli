@@ -79,6 +79,10 @@ mmost search-users --term john --json
 - `get-posts-unread` (`--channel-id`)
 - `create-post` (`--channel-id`, `--message`, `--root-id`)
 - `update-post` (`--post-id`, `--message`)
+- `create-scheduled-post` (`--channel-id`, `--message`, `--at`, `--root-id`, `--days`, `--repeat`)
+- `get-scheduled-posts` (`--exclude-dms`)
+- `update-scheduled-post` (`--scheduled-post-id`, `--message`, `--at`)
+- `delete-scheduled-post` (`--scheduled-post-id`)
 - `get-posts-thread` (`--root-id`, `--from-post`, `--per-page`)
 - `pin-post` (`--post-id`)
 - `unpin-post` (`--post-id`)
@@ -97,7 +101,48 @@ mmost create-post --channel-id abc123 --message "Release is live"
 mmost update-post --post-id post123 --message "Release is live (fixed link)"
 mmost create-dm --user-id user1_id,user2_id
 mmost add-reaction --post-id post123 --emoji-name +1,eyes
+mmost create-scheduled-post --channel-id abc123 --message "Standup in 10 minutes" --at +2h
+mmost get-scheduled-posts --human
+mmost update-scheduled-post --scheduled-post-id sp123 --at 2026-08-25T09:30:00Z
+mmost delete-scheduled-post --scheduled-post-id sp123
 ```
+
+## Scheduled messages
+
+`create-scheduled-post` hands the message to the server, which delivers it later. `--at` accepts:
+
+| Format            | Example                                          |
+| ----------------- | ------------------------------------------------ |
+| Relative offset   | `+90s`, `+30m`, `+2h`, `+1d`, `+1w`              |
+| ISO-8601 (UTC)    | `2026-08-25T09:30:00Z`                           |
+| ISO-8601 (offset) | `2026-08-25T09:30:00+03:00`                      |
+| Local time        | `"2026-08-25 09:30"` (quote it — it has a space) |
+| Unix timestamp    | `1787500425` (seconds) or `1787500425275` (ms)   |
+
+The time must be in the future; otherwise the command fails without contacting the server.
+
+`get-scheduled-posts` returns pending posts ordered by delivery time. Each item carries a `scope`
+field — the response key the server grouped the post under (the team ID, or its direct-channels key
+for DMs and group DMs). Pass `--exclude-dms` to ask the server for team channels only.
+
+`--days mon,wed,fri` schedules a weekly repeat (it implies `--repeat`). Repeating schedules only
+exist on Loop servers; upstream Mattermost rejects them.
+
+### Two backends, detected automatically
+
+Scheduled messages are implemented differently depending on the server, so the CLI checks
+`/api/v4/plugins/webapp` once per run and picks the backend. Every response carries a `backend` field.
+
+|                          | `loop-plugin`                                                                                             | `server`                 |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------ |
+| API                      | `/plugins/ru.loop.plugin.scheduler/{create,list,remove}`                                                  | `/api/v4/posts/schedule` |
+| Detected when            | the `ru.loop.plugin.scheduler` plugin is installed                                                        | it is not                |
+| Weekly repeat (`--days`) | supported                                                                                                 | rejected                 |
+| `--exclude-dms`          | ignored (warning on stderr) — the plugin always lists everything                                          | honoured                 |
+| `update-scheduled-post`  | no update endpoint, so the record is recreated: **the ID changes** and the response carries `replaced_id` | in-place update          |
+
+On a server with neither, the commands fail with `Sorry, we could not find the page.` — that means the
+server has no scheduled messages API at all, not that the arguments are wrong.
 
 ## Agent Skill
 

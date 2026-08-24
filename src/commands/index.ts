@@ -47,7 +47,11 @@ export async function executeCommand(
     command === 'get-posts-thread' ||
     command === 'pin-post' ||
     command === 'unpin-post' ||
-    command === 'get-posts-pinned'
+    command === 'get-posts-pinned' ||
+    command === 'create-scheduled-post' ||
+    command === 'get-scheduled-posts' ||
+    command === 'update-scheduled-post' ||
+    command === 'delete-scheduled-post'
   ) {
     return runPostCommand(command, client, {
       terms: options.terms as string | undefined,
@@ -58,6 +62,11 @@ export async function executeCommand(
       message: options.message as string | undefined,
       rootId: options.rootId as string | undefined,
       fromPost: options.fromPost as string | undefined,
+      at: options.at as string | undefined,
+      scheduledPostId: options.scheduledPostId as string | undefined,
+      excludeDms: options.excludeDms as boolean | undefined,
+      days: options.days as string | undefined,
+      repeat: options.repeat as boolean | undefined,
     });
   }
 

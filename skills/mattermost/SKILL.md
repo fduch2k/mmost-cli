@@ -36,11 +36,12 @@ Configure environment variables:
 
 ## How to use
 
-Run `mmost --help` for the full command list and `mmost help <command>` for details on any command. The CLI has 19 commands:
+Run `mmost --help` for the full command list and `mmost help <command>` for details on any command. The CLI has 23 commands:
 
 **Users**: `get-me`, `get-users`, `search-users`
 **Channels**: `search-channels`, `get-channels`, `get-my-channels`, `create-dm`
 **Posts**: `search-posts`, `get-posts`, `get-posts-unread`, `create-post`, `update-post`, `get-posts-thread`, `pin-post`, `unpin-post`, `get-posts-pinned`
+**Scheduled posts**: `create-scheduled-post`, `get-scheduled-posts`, `update-scheduled-post`, `delete-scheduled-post`
 **Reactions**: `add-reaction`, `remove-reaction`, `get-reactions`
 
 ## ID resolution
@@ -70,6 +71,8 @@ mmost get-users --user-id <user_id>         # batch: --user-id id1,id2,id3
 These commands modify data. **Always confirm with the user before executing.**
 
 - `create-post` — sends a message (or thread reply with `--root-id`)
+- `create-scheduled-post` — queues a message for later delivery by the server
+- `update-scheduled-post` / `delete-scheduled-post` — changes or cancels a pending scheduled message
 - `update-post` — replaces the message text of an existing post (own posts only)
 - `create-dm` — creates a DM channel between two users (idempotent)
 - `pin-post` / `unpin-post` — pins or unpins a post
@@ -111,6 +114,10 @@ get-posts-unread --channel-id <str>
 get-posts-thread --root-id <str> [--from-post <str>] [--per-page <n>]
 create-post     --channel-id <str> --message <str> [--root-id <str>]
 update-post     --post-id <str> --message <str>
+create-scheduled-post --channel-id <str> --message <str> --at <time> [--root-id <str>] [--days mon,fri]
+get-scheduled-posts   [--exclude-dms]
+update-scheduled-post --scheduled-post-id <str> [--message <str>] [--at <time>]
+delete-scheduled-post --scheduled-post-id <str>
 pin-post        --post-id <str>
 unpin-post      --post-id <str>
 get-posts-pinned --channel-id <str>
@@ -162,10 +169,50 @@ mmost update-post --post-id <post_id> --message "<full new text>"
 - `edit_at` becomes non-empty in the response — that confirms the edit landed.
 - **Editing sends no notifications.** If people need to know about the change, add a reply in the thread: `create-post --root-id <post_id>`.
 
+### Scheduled messages
+
+`create-scheduled-post` hands a message to the server for later delivery. `--at` accepts a relative
+offset (`+30m`, `+2h`, `+1d`, `+1w`), ISO-8601 (`2026-08-25T09:30:00Z`, `2026-08-25T09:30:00+03:00`),
+a quoted local time (`"2026-08-25 09:30"` — quotes are required, it contains a space) or a unix
+timestamp in seconds/milliseconds. Times in the past are rejected before any request is sent.
+
+```bash
+mmost create-scheduled-post --channel-id <cid> --message "Standup in 10 min" --at +2h
+mmost create-scheduled-post --channel-id <cid> --message "Standup" --at +1d --days mon,wed,fri
+mmost get-scheduled-posts                      # pending, earliest first; take `id`
+mmost update-scheduled-post --scheduled-post-id <id> --at +1d     # reschedule
+mmost delete-scheduled-post --scheduled-post-id <id>              # cancel delivery
+```
+
+**Two backends, picked automatically.** Loop implements scheduled messages as the
+`ru.loop.plugin.scheduler` plugin, not through the upstream `/api/v4/posts/schedule` API. The CLI
+detects which one the server has and reports it in the `backend` field of every response.
+
+|                         | `loop-plugin` (Loop)                                              | `server` (upstream Mattermost) |
+| ----------------------- | ----------------------------------------------------------------- | ------------------------------ |
+| `--days` weekly repeat  | works                                                             | rejected with a clear error    |
+| `--exclude-dms`         | ignored, warning on stderr                                        | honoured                       |
+| `update-scheduled-post` | recreates the record — **ID changes**, response has `replaced_id` | updates in place               |
+
+Other things worth knowing:
+
+- `--scheduled-post-id` comes from `get-scheduled-posts`, **not** from `get-posts` — a scheduled
+  message has no post ID until it is delivered.
+- `update-scheduled-post` needs at least one of `--message` or `--at`; untouched fields are preserved,
+  including the repeat days on Loop.
+- On the upstream backend, `scope` is the server's grouping key (team ID or its direct-channels key)
+  and `error_code` (`channel_archived`, `no_channel_permission`, …) marks a post the server kept
+  pending instead of delivering.
+- **`Sorry, we could not find the page.` means the server has no scheduled messages API** — neither
+  the Loop plugin nor `/api/v4/posts/schedule` (e.g. Mattermost 10.5.0 without the plugin). Fall back
+  to `create-post` and say the server does not support scheduling.
+
 ## Known limitations
 
 - **No overview command** — compose triage: `get-my-channels` → `get-posts-unread` per channel
 - **No mentions command** — use `get-me` to get username, then `search-posts --terms "@username"`
 - **No time filters** — no `--since` flag; use `search-posts` date modifiers (`after:`, `before:`, `on:`) instead
+- **Scheduled posts need server support** — see "Scheduled messages"; without the Loop plugin or the upstream API the commands 404
+- **No admin view of others' scheduled messages** — the Loop plugin exposes it only to `system_admin`, and the CLI does not use it
 - **`get-my-channels` excludes DMs** — returns public (O) and private (P) only; use `create-dm` to get a specific DM channel or `search-channels` for lookup
 - **IDs required** — see "ID resolution" above

@@ -86,7 +86,7 @@ export function getHelpText(commandName?: string): string {
   }
 
   const commandLines = COMMAND_SPECS.map(
-    spec => `  ${spec.name.padEnd(18)} ${spec.description}`,
+    spec => `  ${spec.name.padEnd(22)} ${spec.description}`,
   ).join('\n');
 
   return [

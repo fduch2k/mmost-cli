@@ -1,4 +1,6 @@
 import { MattermostClient } from '../client/mattermost-client';
+import { parseScheduledAt } from '../utils/time-parser';
+import { parseDaysOfWeek } from '../utils/weekdays';
 
 type PostCommandOptions = {
   terms?: string;
@@ -9,7 +11,22 @@ type PostCommandOptions = {
   message?: string;
   rootId?: string;
   fromPost?: string;
+  at?: string;
+  scheduledPostId?: string;
+  excludeDms?: boolean;
+  days?: string;
+  repeat?: boolean;
 };
+
+function resolveDaysOfWeek(options: PostCommandOptions): boolean[] | undefined {
+  if (options.days) {
+    return parseDaysOfWeek(options.days);
+  }
+  if (options.repeat) {
+    throw new Error('Missing required option: --days (which days to repeat on)');
+  }
+  return undefined;
+}
 
 function splitCsv(value: string): string[] {
   return value
@@ -73,6 +90,55 @@ export async function runPostCommand(
       postId: options.postId,
       message: options.message,
     });
+  }
+
+  if (command === 'create-scheduled-post') {
+    if (!options.channelId) {
+      throw new Error('Missing required option: --channel-id');
+    }
+    if (!options.message) {
+      throw new Error('Missing required option: --message');
+    }
+    if (!options.at) {
+      throw new Error('Missing required option: --at');
+    }
+    return client.createScheduledPost({
+      channelId: options.channelId,
+      message: options.message,
+      scheduledAt: parseScheduledAt(options.at),
+      rootId: options.rootId,
+      daysOfWeek: resolveDaysOfWeek(options),
+    });
+  }
+
+  if (command === 'get-scheduled-posts') {
+    if (options.excludeDms && (await client.getSchedulerBackend()) === 'loop-plugin') {
+      process.stderr.write(
+        'Warning: --exclude-dms is ignored on Loop servers — the scheduler plugin always lists every scheduled message.\n',
+      );
+    }
+    return client.getScheduledPosts({ includeDirectChannels: !options.excludeDms });
+  }
+
+  if (command === 'update-scheduled-post') {
+    if (!options.scheduledPostId) {
+      throw new Error('Missing required option: --scheduled-post-id');
+    }
+    if (!options.message && !options.at) {
+      throw new Error('Missing required option: at least one of --message or --at');
+    }
+    return client.updateScheduledPost({
+      scheduledPostId: options.scheduledPostId,
+      message: options.message,
+      scheduledAt: options.at ? parseScheduledAt(options.at) : undefined,
+    });
+  }
+
+  if (command === 'delete-scheduled-post') {
+    if (!options.scheduledPostId) {
+      throw new Error('Missing required option: --scheduled-post-id');
+    }
+    return client.deleteScheduledPost({ scheduledPostId: options.scheduledPostId });
   }
 
   if (command === 'get-posts-thread') {
