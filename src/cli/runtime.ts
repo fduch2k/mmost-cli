@@ -1,5 +1,6 @@
 import { MattermostClient } from '../client/mattermost-client';
-import { executeCommand } from '../commands';
+import { executeCommand, toWatchOptions } from '../commands';
+import { followPostChanges } from '../commands/watch-commands';
 import { loadConfig } from '../config/config';
 import { formatMarkdown } from '../utils/markdown-formatter';
 import { formatErrorOutput } from '../utils/output-formatter';
@@ -41,6 +42,15 @@ export async function runCli(
 
     const createClient = dependencies.createClient || defaultCreateClient;
     const client = await createClient();
+
+    // A stream cannot be returned as a value the way every other command is
+    if (parsed.command === 'watch-posts' && parsed.options.follow) {
+      if (parsed.format === 'human') {
+        throw new Error('--follow streams NDJSON and cannot be combined with --human');
+      }
+      return followPostChanges(client, toWatchOptions(parsed.options), output);
+    }
+
     const result = await executeCommand(parsed.command, client, parsed.options);
     const formatted =
       parsed.format === 'human'

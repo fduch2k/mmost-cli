@@ -1,6 +1,6 @@
 ---
 name: mattermost
-description: Read, search, and interact with Mattermost chat using the `mmost` CLI. Use this skill when the user mentions Mattermost, chat messages, team chat, unread messages, DMs, channel history, mentions, sending messages, replying to threads, reactions, pinning posts, or wants to catch up on what happened in chat. Also triggers when the user asks about specific people's messages, channel activity, searching for something someone said, checking notifications, or wants to send a message or react to a post.
+description: Read, search, interact with and monitor Mattermost chat using the `mmost` CLI. Use this skill when the user mentions Mattermost, chat messages, team chat, unread messages, DMs, channel history, mentions, sending messages, replying to threads, reactions, pinning posts, or wants to catch up on what happened in chat. Also triggers when the user asks about specific people's messages, channel activity, searching for something someone said, checking notifications, or wants to send a message or react to a post. Also use it to watch a channel or thread for new, edited or deleted messages — poll for changes since a cursor, block until someone replies, or stream changes — instead of writing a custom poll loop.
 ---
 
 # Mattermost CLI (`mmost`)
@@ -36,11 +36,12 @@ Configure environment variables:
 
 ## How to use
 
-Run `mmost --help` for the full command list and `mmost help <command>` for details on any command. The CLI has 23 commands:
+Run `mmost --help` for the full command list and `mmost help <command>` for details on any command. The CLI has 24 commands:
 
 **Users**: `get-me`, `get-users`, `search-users`
 **Channels**: `search-channels`, `get-channels`, `get-my-channels`, `create-dm`
 **Posts**: `search-posts`, `get-posts`, `get-posts-unread`, `create-post`, `update-post`, `get-posts-thread`, `pin-post`, `unpin-post`, `get-posts-pinned`
+**Monitoring**: `watch-posts`
 **Scheduled posts**: `create-scheduled-post`, `get-scheduled-posts`, `update-scheduled-post`, `delete-scheduled-post`
 **Reactions**: `add-reaction`, `remove-reaction`, `get-reactions`
 
@@ -112,6 +113,8 @@ search-posts    --terms <str> [--page <n>] [--per-page <n>]
 get-posts       --post-id <str>                 # comma-separated IDs
 get-posts-unread --channel-id <str>
 get-posts-thread --root-id <str> [--from-post <str>] [--per-page <n>]
+watch-posts     (--channel-id <str> | --root-id <str>) [--since <cursor>] [--events <list>]
+                [--include-self] [--wait | --follow] [--interval 15s] [--timeout 15m]
 create-post     --channel-id <str> --message <str> [--root-id <str>]
 update-post     --post-id <str> --message <str>
 create-scheduled-post --channel-id <str> --message <str> --at <time> [--root-id <str>] [--days mon,fri]
@@ -128,12 +131,15 @@ get-reactions   --post-id <str>
 
 ### Common gotchas
 
-| Want to...             | ✅ Correct                           | ❌ Wrong                          |
-| ---------------------- | ------------------------------------ | --------------------------------- |
-| Read a thread          | `get-posts-thread --root-id <id>`    | `get-posts-thread --post-id <id>` |
-| Read specific posts    | `get-posts --post-id <id>`           | `get-posts --root-id <id>`        |
-| Read unread in channel | `get-posts-unread --channel-id <id>` | `get-posts-unread --post-id <id>` |
-| Edit a post            | `update-post --post-id <id>`         | `create-post --post-id <id>`      |
+| Want to...             | ✅ Correct                                                  | ❌ Wrong                                              |
+| ---------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
+| Read a thread          | `get-posts-thread --root-id <id>`                           | `get-posts-thread --post-id <id>`                     |
+| Read specific posts    | `get-posts --post-id <id>`                                  | `get-posts --root-id <id>`                            |
+| Read unread in channel | `get-posts-unread --channel-id <id>`                        | `get-posts-unread --post-id <id>`                     |
+| Edit a post            | `update-post --post-id <id>`                                | `create-post --post-id <id>`                          |
+| Watch a thread         | `watch-posts --root-id <id>`                                | `watch-posts --post-id <id>`                          |
+| Start watching         | `watch-posts --root-id <id>` first, then `--since <cursor>` | `watch-posts --root-id <id> --wait` with no `--since` |
+| Last 2 hours           | `watch-posts --root-id <id> --since -2h`                    | `watch-posts --root-id <id> --since +2h`              |
 
 ### URL → post ID extraction
 
@@ -207,11 +213,65 @@ Other things worth knowing:
   the Loop plugin nor `/api/v4/posts/schedule` (e.g. Mattermost 10.5.0 without the plugin). Fall back
   to `create-post` and say the server does not support scheduling.
 
+## Watching for new messages
+
+`watch-posts` replaces a hand-rolled poll loop. It is cursor-based and keeps no state of its own:
+the cursor comes back in every response and you pass it to the next call.
+
+```bash
+# 1. Baseline — returns a cursor and no changes, so nothing already in the channel is replayed
+CUR=$(mmost watch-posts --root-id <root> | jq -r .cursor)
+
+# 2. Ask what changed. Repeat with the cursor from each response
+mmost watch-posts --root-id <root> --since "$CUR"
+
+# 2b. Or skip the baseline entirely and name a moment: -30m, -2h, -1d, -1w,
+#     ISO-8601 (2026-09-04T12:00:00Z) or a unix timestamp
+mmost watch-posts --root-id <root> --since -2h
+
+# 3. Or block until something changes, then exit (best for an agent: run it in the background
+#    and the harness wakes you when the process exits)
+mmost watch-posts --root-id <root> --since "$CUR" --wait --timeout 30m
+
+# 4. Or stream, one NDJSON line per change, until killed
+mmost watch-posts --channel-id <id> --since "$CUR" --follow --interval 30s
+```
+
+Each change is `{event, post_id, user_id, root_id, create_at, update_at, message}`.
+
+| Event     | Meaning                                                                                                                                                           |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `created` | a new post                                                                                                                                                        |
+| `edited`  | an existing post's text changed                                                                                                                                   |
+| `deleted` | a post was removed (`message` is empty — the server blanks it)                                                                                                    |
+| `updated` | `update_at` moved with no text change: a reaction, a pin, or a reply added to a thread. **Cause not reported**, and withheld unless you ask for it via `--events` |
+
+### Rules that matter
+
+- **Your own posts are skipped** unless `--include-self`. An agent that posts into the thread it
+  watches would otherwise wake itself in a loop.
+- **`--wait` and `--follow` require `--since`.** Take a baseline first; there is no "watch from the
+  beginning of time" mode, because that replays the channel.
+- **A timeout is not an error.** `--wait` returns `timed_out: true` with the cursor unchanged, exit
+  code 0. Pass that cursor straight back in.
+- **Treat the cursor as opaque.** It is `<ms>:<id>,<id>` — the timestamp alone loses messages
+  written in the same millisecond.
+- **`--since` also takes a human moment**: `-2h`, `-1d`, ISO-8601, or a unix timestamp. Use it for a
+  one-off "what happened in the last N" without a baseline call. A moment is inclusive of that
+  millisecond, and a moment in the **future** is rejected (it would report nothing until it arrives).
+- **A thread is watched through its channel**, so `--root-id` needs no separate channel id, and
+  edits/deletions of old replies are reported (the thread API cannot report them).
+- **`--follow` is JSON-only** — it cannot be combined with `--human`.
+- A transient failure is retried (5 consecutive failures abort); retries go to stderr, so stdout
+  stays parseable.
+
 ## Known limitations
 
 - **No overview command** — compose triage: `get-my-channels` → `get-posts-unread` per channel
 - **No mentions command** — use `get-me` to get username, then `search-posts --terms "@username"`
-- **No time filters** — no `--since` flag; use `search-posts` date modifiers (`after:`, `before:`, `on:`) instead
+- **No time filters on search** — `search-posts` has no `--since`; use its date modifiers (`after:`, `before:`, `on:`). For change monitoring use `watch-posts`
+- **`watch-posts` polls, it does not push** — latency is one `--interval`; there is no websocket mode
+- **`watch-posts` cannot say why an `updated` fired** — reaction, pin and reply-count bumps are indistinguishable over REST
 - **Scheduled posts need server support** — see "Scheduled messages"; without the Loop plugin or the upstream API the commands 404
 - **No admin view of others' scheduled messages** — the Loop plugin exposes it only to `system_admin`, and the CLI does not use it
 - **`get-my-channels` excludes DMs** — returns public (O) and private (P) only; use `create-dm` to get a specific DM channel or `search-channels` for lookup
