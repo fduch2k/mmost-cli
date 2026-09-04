@@ -260,6 +260,38 @@ function isPostList(value: unknown): value is object {
   );
 }
 
+export function formatPostChangesMarkdown(window: object): string {
+  const w = window as Record<string, unknown>;
+  const changes = isArray(w.changes) ? (w.changes as Array<Record<string, unknown>>) : [];
+  const scope = w.root_id ? `thread ${str(w.root_id)}` : `channel ${str(w.channel_id)}`;
+
+  const header = [
+    `## Changes in ${scope}`,
+    '',
+    `Cursor: \`${str(w.cursor)}\``,
+    ...(w.baseline
+      ? ['', 'Baseline only — pass this cursor back with `--since` to see changes.']
+      : []),
+    ...(w.timed_out ? ['', 'Timed out with nothing new.'] : []),
+  ];
+
+  if (!changes.length) {
+    return [...header, '', '_No changes._'].join('\n');
+  }
+
+  return [
+    ...header,
+    '',
+    '| When | Event | Post | Author | Message |',
+    '|------|-------|------|--------|---------|',
+    ...changes.map(
+      c =>
+        `| ${dateOrDash(c.update_at)} | ${escapeCell(c.event)} | ${escapeCell(c.post_id)} | ` +
+        `${escapeCell(c.user_id)} | ${truncate(c.message, 60)} |`,
+    ),
+  ].join('\n');
+}
+
 export function formatMarkdown(data: unknown, command: string): string {
   switch (command) {
     case 'get-me':
@@ -324,6 +356,10 @@ export function formatMarkdown(data: unknown, command: string): string {
     case 'get-scheduled-posts':
       if (isArray(data)) return formatScheduledPostsMarkdown(data);
       if (isObject(data)) return formatScheduledPostMarkdown(data);
+      return formatStatusMarkdown({ result: data });
+
+    case 'watch-posts':
+      if (isObject(data) && !isArray(data)) return formatPostChangesMarkdown(data);
       return formatStatusMarkdown({ result: data });
 
     case 'pin-post':

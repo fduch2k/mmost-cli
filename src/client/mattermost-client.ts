@@ -6,6 +6,15 @@ import { ScheduledPost } from '@mattermost/types/schedule_post';
 import { UserProfile } from '@mattermost/types/users';
 
 import { MattermostConfig } from '../config/config';
+import {
+  ChangeEvent,
+  PostChange,
+  WatchCursor,
+  baselineCursor,
+  detectChanges,
+  formatCursor,
+  sinceParam,
+} from '../utils/post-changes';
 import { toIsoWithOffset } from '../utils/time-parser';
 import { formatDaysOfWeek } from '../utils/weekdays';
 
@@ -23,6 +32,21 @@ const CONNECTION_ID = 'mmost-cli';
 const SCHEDULER_PLUGIN_ID = 'ru.loop.plugin.scheduler';
 
 export type SchedulerBackend = 'loop-plugin' | 'server';
+
+/**
+ * How far back a watch looks to place its baseline cursor
+ * Only the newest `update_at` in the page is kept, so this is about covering
+ * recent activity, not about reading history
+ */
+const WATCH_BASELINE_PER_PAGE = 60;
+
+export type PostChangeWindow = {
+  channel_id: string;
+  root_id?: string;
+  cursor: string;
+  baseline?: boolean;
+  changes: (Omit<PostChange, 'create_at' | 'update_at'> & { create_at: Date; update_at: Date })[];
+};
 
 /**
  * Envelope the Loop scheduler plugin wraps every response in
@@ -57,6 +81,8 @@ export class MattermostClient {
   private teamId: string = '';
   private readonly config: MattermostConfig;
   private schedulerBackend?: SchedulerBackend;
+  private cachedUserId?: string;
+  private readonly watchTargets = new Map<string, { channelId: string; rootId?: string }>();
 
   /**
    * Create a new Mattermost client
@@ -258,6 +284,118 @@ export class MattermostClient {
         perPage,
       }),
     );
+  }
+
+  /**
+   * Read one change window of a channel or a thread
+   *
+   * Threads are watched through their channel rather than through
+   * `/posts/{id}/thread`: the thread endpoint is cursored on `create_at`, so it
+   * never reports an edit or a deletion of an existing reply, and it returns the
+   * root post on every call regardless of the cursor — all three verified against a
+   * live server
+   */
+  async readPostChanges({
+    channelId,
+    rootId,
+    cursor,
+    events,
+    includeSelf,
+  }: {
+    channelId?: string;
+    rootId?: string;
+    cursor?: WatchCursor;
+    events?: ChangeEvent[];
+    includeSelf?: boolean;
+  }): Promise<PostChangeWindow> {
+    const target = await this.resolveWatchTarget({ channelId, rootId });
+    const scope = {
+      channel_id: target.channelId,
+      ...(target.rootId ? { root_id: target.rootId } : {}),
+    };
+
+    if (!cursor) {
+      return {
+        ...scope,
+        cursor: formatCursor(await this.baselineFor(target.channelId)),
+        baseline: true,
+        changes: [],
+      };
+    }
+
+    const excludeUserId = includeSelf ? undefined : await this.myUserId();
+    const window = await this.client.getPostsSince(target.channelId, sinceParam(cursor));
+    const detected = detectChanges(Object.values(window.posts), cursor, {
+      rootId: target.rootId,
+      excludeUserId,
+      events,
+    });
+    return {
+      ...scope,
+      cursor: formatCursor(detected.cursor),
+      changes: detected.changes.map(change => this.convertChange(change)),
+    };
+  }
+
+  /**
+   * Where a watch should start so that nothing already in the channel is reported
+   *
+   * Two requests, not one. The newest page hides deleted posts, so its highest
+   * `update_at` can sit far behind the channel's real last activity — in a channel
+   * whose recent traffic was edits and deletions it landed months back, and the first
+   * poll then replayed every one of them. Settling that timestamp through one `since`
+   * window pulls in the records the page cannot show and lands the cursor on now
+   */
+  private async baselineFor(channelId: string): Promise<WatchCursor> {
+    const recent = await this.client.getPosts(channelId, 0, WATCH_BASELINE_PER_PAGE);
+    const visible = baselineCursor(Object.values(recent.posts));
+    if (!visible.ts) {
+      return visible;
+    }
+    const window = await this.client.getPostsSince(channelId, sinceParam(visible));
+    return detectChanges(Object.values(window.posts), visible).cursor;
+  }
+
+  /**
+   * Both of these are asked for once per poll but never change during a run, and
+   * `--wait`/`--follow` poll for as long as the caller lets them — resolving them
+   * every time would triple the request count of a watch
+   */
+  private async myUserId(): Promise<string> {
+    this.cachedUserId ??= (await this.client.getMe()).id;
+    return this.cachedUserId;
+  }
+
+  private async resolveWatchTarget({
+    channelId,
+    rootId,
+  }: {
+    channelId?: string;
+    rootId?: string;
+  }): Promise<{ channelId: string; rootId?: string }> {
+    if (rootId) {
+      const cached = this.watchTargets.get(rootId);
+      if (cached) {
+        return cached;
+      }
+      const post = await this.client.getPost(rootId);
+      // A reply passed as --root-id would otherwise watch a thread whose root_id matches nothing
+      const target = { channelId: post.channel_id, rootId: post.root_id || post.id };
+      this.watchTargets.set(rootId, target);
+      return target;
+    }
+    if (!channelId) {
+      throw new Error('Either --channel-id or --root-id is required');
+    }
+    return { channelId };
+  }
+
+  private convertChange(change: PostChange) {
+    return {
+      ...change,
+      create_at: new Date(change.create_at),
+      update_at: new Date(change.update_at),
+    };
   }
 
   /**

@@ -4,8 +4,24 @@ import { runChannelCommand } from './channel-commands';
 import { runPostCommand } from './post-commands';
 import { runReactionCommand } from './reaction-commands';
 import { runUserCommand } from './user-commands';
+import { WatchCommandOptions, runWatchCommand } from './watch-commands';
 
 type CommandOptions = Record<string, string | number | boolean>;
+
+/** `watch-posts` is also reachable from the runtime's streaming path, so the mapping is shared */
+export function toWatchOptions(options: CommandOptions): WatchCommandOptions {
+  return {
+    channelId: options.channelId as string | undefined,
+    rootId: options.rootId as string | undefined,
+    since: options.since as string | undefined,
+    events: options.events as string | undefined,
+    includeSelf: options.includeSelf as boolean | undefined,
+    wait: options.wait as boolean | undefined,
+    follow: options.follow as boolean | undefined,
+    interval: options.interval as string | undefined,
+    timeout: options.timeout as string | undefined,
+  };
+}
 
 export async function executeCommand(
   command: string,
@@ -68,6 +84,10 @@ export async function executeCommand(
       days: options.days as string | undefined,
       repeat: options.repeat as boolean | undefined,
     });
+  }
+
+  if (command === 'watch-posts') {
+    return runWatchCommand(client, toWatchOptions(options));
   }
 
   if (command === 'add-reaction' || command === 'remove-reaction' || command === 'get-reactions') {

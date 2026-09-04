@@ -370,6 +370,80 @@ export const COMMAND_SPECS: CommandSpec[] = [
     examples: ['mmost get-posts-thread --root-id p1 --per-page 30'],
   },
   {
+    name: 'watch-posts',
+    description:
+      'Report what changed in a channel or a thread since a cursor. One of --channel-id or --root-id is required. Without --since it returns a baseline cursor and no changes; pass that cursor back to get the changes since. Own posts are excluded unless --include-self, so a watching agent does not wake itself.',
+    options: [
+      {
+        key: 'channelId',
+        flag: 'channel-id',
+        type: 'string',
+        description: 'Channel to watch (required if --root-id not provided)',
+      },
+      {
+        key: 'rootId',
+        flag: 'root-id',
+        type: 'string',
+        description: 'Thread root post ID to watch (required if --channel-id not provided)',
+      },
+      {
+        key: 'since',
+        flag: 'since',
+        type: 'string',
+        description:
+          'Where to read from: a cursor from a previous run, or a moment — -30m, -2h, -1d, -1w, ISO-8601 (2026-08-25T09:30:00Z), or a unix timestamp. Omit to get a baseline cursor without reading history',
+      },
+      {
+        key: 'events',
+        flag: 'events',
+        type: 'string',
+        description:
+          'Events to report: created, edited, deleted, updated (default: created,edited,deleted). `updated` is a bump with no text change — a reaction, a pin, or a reply added to a thread — and its cause is not reported',
+      },
+      {
+        key: 'includeSelf',
+        flag: 'include-self',
+        type: 'boolean',
+        description: 'Report your own posts too (default: they are skipped)',
+      },
+      {
+        key: 'wait',
+        flag: 'wait',
+        type: 'boolean',
+        description:
+          'Block until something changes, then print it and exit. Requires --since. On timeout the result carries timed_out: true and the unchanged cursor',
+      },
+      {
+        key: 'follow',
+        flag: 'follow',
+        type: 'boolean',
+        description:
+          'Stream changes as NDJSON, one line per change, until killed. Requires --since',
+      },
+      {
+        key: 'interval',
+        flag: 'interval',
+        type: 'string',
+        description: 'Poll interval for --wait and --follow (default: 15s)',
+      },
+      {
+        key: 'timeout',
+        flag: 'timeout',
+        type: 'string',
+        description:
+          'Give up waiting after this long (default: 15m). With --follow there is no timeout unless you pass one',
+      },
+    ],
+    examples: [
+      'mmost watch-posts --root-id p1',
+      'mmost watch-posts --root-id p1 --since -2h',
+      'mmost watch-posts --root-id p1 --since 1788525201548',
+      'mmost watch-posts --root-id p1 --since 1788525201548 --wait --timeout 30m',
+      'mmost watch-posts --channel-id abc123 --since 1788525201548 --follow --interval 30s',
+      'mmost watch-posts --channel-id abc123 --since 1788525201548 --events created,edited,deleted,updated',
+    ],
+  },
+  {
     name: 'pin-post',
     description: 'Pin a post',
     options: [
